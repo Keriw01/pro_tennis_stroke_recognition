@@ -1,0 +1,12 @@
+opencv-python
+mediapipe
+pandas
+numpy
+yt_dlp
+ffmpeg
+scikit-learn
+fastdtw
+matplotlib
+seaborn
+tqdm
+rich
