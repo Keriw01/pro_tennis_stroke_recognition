@@ -40,8 +40,9 @@ Przykład anotacji: Jeśli **Novak Djokovic** wykonuje uderzenie typu **forhend 
 - **Klasyfikacja:** Zastosowanie i porównanie czterech różnych modeli klasyfikacji:
   1. **DTW + k-NN**
   2. **LDMLT**
-  3. **BiLSTM**
-  4. **TS2Vec + SVM**
+  3. **TS2Vec + SVM**
+  4. **GRU**
+  5. **BiLSTM**
 
 ### Rodzaje normalizacji danych:
 1. Uniezależnienie od położenia (punkt środkowy zawsze w punkcie zerowym)
@@ -61,15 +62,21 @@ Poniżej znajduje się opis głównych folderów i plików projektu:
     - `processed_videos_30fps/` - wideo przekonwertowane do 30 klatek na sekundę
     - `annotations_csv/` - adnotacje wyeksportowane do formatu CSV
     - `processed_features/` - pliki `.pkl` z cechami szkieletu (surowe + znormalizowane)
-    - `training_results/` - zapisane wyniki (raport i macierz pomyłek) z powytrenowaniu modelu.
+    - `training_results/` - zapisane wyniki (raport i macierz pomyłek) z powytrenowaniu modelu
+    - `annotations_elan.rar` - archiwum zawierające wszystkie pliki adnotacji (.eaf) dla analizowanych filmów, wykonane w programie ELAN
+    - `matlab_data_for_LDMLT.mat` - plik w formacie .mat zawierający przetworzone sekwencje cech (punkty szkieletu) oraz odpowiadające im pełne etykiety ('uderzenie gracz'). Jest to plik wejściowy dla skryptów w środowisku MATLAB
   - `src/`
     - `00_extract_features.py` - ekstrakcja punktów szkieletu z wideo
     - `01_normalize_pos.py` - normalizacja względem położenia (punkt środkowy zawsze w punkcie zerowym)
     - `10_train_dtw_knn.py` - skrypt treningowy dla DTW + k-NN
   - `tools/` - skrypty pomocnicze
     - `fetch_30fps_video.py` - konwersja wideo do 30 FPS
+    - `convert_pkl_to_mat.py` - skrypt pozwalający przekonwertować dane po normalizacji zapisane w formacie .pkl na format dla Matlaba
     - `matlab_scripts/` - skrypty do eksportu adnotacji z programu ELAN
       - `ELAN m-funkcje/` - folder z funkcjami pomocniczymi dla Matlaba
+      - `LDMLT_TS/` - folder zawierający pliki źródłowe biblioteki LDMLT dla środowiska MATLAB
+      - `train_ldmlt_knn_hiperparameters.m` - skrypt służący do tuningu hiperparametrów (k, tripletsfactor, cycle i alphafactor) klasyfikatora LDMLT
+      - `train_ldmlt_knn.m` - główny skrypt treningowy dla modelu LDMLT w MATLAB
       - `extract_elan_annotations_to_csv.m` - eksport anotacji do CSV
   - `README.md` - dokumentacja projektu
   - `requirements.txt` - plik z listą zależności dla Pythona 3.12
@@ -135,7 +142,7 @@ Skrypt wczytuje surowe dane i normalizuje je poprzez:
 * Uniezależnienie od położenia (przesunięcie środka ciężkości do zera)
 * Zapisuje dane do pliku 01_normalized_sequences_pos.pkl
 
-### Krok 5: Trening i ocena modelu
+### Krok 5.1: Trening i ocena modelu DTW + kNN
 ```bash
 # Wykonać na środowisku venv z Python 3.12
 python src/10_train_dtw_knn.py
@@ -154,7 +161,31 @@ Wyniki zostaną zapisane do nowego folderu w:
 data/training_results/10_dtw_knn_results/<timestamp>/
 ```
 
+### Krok 5.2: Trening i ocena modelu LDMLT
+```bash
+# Wykonać na środowisku venv z Python 3.12
+python tools/convert_pkl_to_mat.py
+```
+Skrypt:
+* Wczytuje znormalizowane dane i zapisuje w formacie który pozwoli na otworzenie tych danych w Matlab
+
+Plik zostanie zapisany w:
+```bash
+data/matlab_data_for_LDMLT.mat
+```
+
+```bash
+# Wykonać plik w MATLAB dodając wcześniej folder roboczy wraz biblioteką LDMLT_TS
+tools/matlab_scripts/train_ldmlt_knn.m
+```
+
+Wyniki zostaną zapisane do nowego folderu w:
+```bash
+data/training_results/ldmlt_knn_results/<timestamp>/
+```
+
 ## 🛠️ Wersje oprogramowania
 * ELAN: 6.1
 * Środowisko .venv: Python 3.12, pip: 25.0.1
+* MATLAB R2024a
 * Visual Studio Code: September 2025 (version 1.105)

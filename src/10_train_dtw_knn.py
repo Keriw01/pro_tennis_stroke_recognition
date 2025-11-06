@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 import pickle
+import time
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -23,7 +24,7 @@ K = 18
 DISTANCE = cosine
 DISTANCE_NAME = "cosine"
 PREFIX = f"k={K}_{DISTANCE_NAME}"
-NORMALIZED_DATA_PATH = "data/processed_features/01_normalized_sequences_with_legs_pose_world_landmarks_image_mode_false_model_complexity_1.pkl"
+NORMALIZED_DATA_PATH = "data/processed_features/normalization_with_geometrical_mean_calc/01_normalized_sequences_with_legs_pose_world_landmarks_image_mode_false_model_complexity_1.pkl"
 
 try:
     with open(NORMALIZED_DATA_PATH, "rb") as f:
@@ -81,6 +82,7 @@ console.print("\n[bold]Starting Leave-One-Subject-Out Cross-Validation...[/bold]
 all_y_test = []
 all_y_pred = []
 fold_accuracies = {}
+fold_classification_times = {}
 
 for subject_to_leave_out in unique_subjects:
     console.print(
@@ -104,14 +106,6 @@ for subject_to_leave_out in unique_subjects:
 
     n_test, n_train = len(X_test), len(X_train)
 
-    distance_matrix = np.zeros((n_test, n_train))
-
-    for i in tqdm(range(n_test), desc="Calculating test-train distances"):
-        for j in range(n_train):
-            distance_matrix[i, j] = dtw_distance(X_test[i], X_train[j])
-
-    console.print("[green]Test-to-train distance matrix calculated.[/green]")
-
     train_distance_matrix = np.zeros((n_train, n_train))
     for i in tqdm(range(n_train), desc="Calculating train-train distances for .fit()"):
         for j in range(i, n_train):
@@ -128,8 +122,34 @@ for subject_to_leave_out in unique_subjects:
     knn_clf.fit(train_distance_matrix, y_train)
     console.print("[green]Model training complete.[/green]")
 
+    start_time_classification = time.time()
+
+    distance_matrix = np.zeros((n_test, n_train))
+
+    for i in tqdm(range(n_test), desc="Calculating test-train distances"):
+        for j in range(n_train):
+            distance_matrix[i, j] = dtw_distance(X_test[i], X_train[j])
+
+    console.print("[green]Test-to-train distance matrix calculated.[/green]")
+
     y_pred = knn_clf.predict(distance_matrix)
     console.print("[green]Prediction complete.[/green]")
+
+    end_time_classification = time.time()
+
+    classification_duration = end_time_classification - start_time_classification
+    avg_time_per_sample = (
+        classification_duration / len(X_test) if len(X_test) > 0 else 0
+    )
+
+    console.print(
+        f"[cyan]Total classification time for fold: {classification_duration:.4f} seconds[/cyan]"
+    )
+    console.print(
+        f"[cyan]Average time per test sample: {avg_time_per_sample:.6f} seconds[/cyan]"
+    )
+
+    fold_classification_times[subject_to_leave_out] = avg_time_per_sample
 
     fold_accuracy = accuracy_score(y_test, y_pred)
     fold_accuracies[subject_to_leave_out] = fold_accuracy
@@ -151,6 +171,18 @@ std_accuracy = np.std(accuracies_list)
 console.print(
     f"\n[bold]Average LOSO CV Accuracy: [cyan]{mean_accuracy:.4f} ± {std_accuracy:.4f}[/cyan]"
 )
+
+times_list = list(fold_classification_times.values())
+mean_time = np.mean(times_list)
+std_time = np.std(times_list)
+
+console.print(
+    f"\n[bold]Average Classification Time per Sample: [cyan]{mean_time:.6f} ± {std_time:.6f} seconds[/cyan]"
+)
+
+console.print("\n[underline]Classification time for each subject left out:[/underline]")
+for subject, t in fold_classification_times.items():
+    console.print(f"  - {subject}: {t:.6f} seconds")
 
 console.print("\n[underline]Accuracy for each subject left out:[/underline]")
 for subject, acc in fold_accuracies.items():
@@ -176,14 +208,21 @@ console.print(f"\n[yellow]Results will be saved in: {RESULTS_DIR}[/yellow]")
 
 with open(os.path.join(RESULTS_DIR, "detailed_accuracies.txt"), "w") as f:
     f.write(f"Average LOSO CV Accuracy: {mean_accuracy:.4f} ± {std_accuracy:.4f}\n\n")
+    f.write(
+        f"Average Classification Time per Sample: {mean_time:.6f} ± {std_time:.6f} seconds\n\n"
+    )
     f.write("Accuracy for each subject left out:\n")
     for subject, acc in fold_accuracies.items():
         f.write(f"  - {subject}: {acc:.4f}\n")
+    f.write("\nClassification time per sample for each subject left out:\n")
+    for subject, t in fold_classification_times.items():
+        f.write(f"  - {subject}: {t:.6f} s\n")
 
 with open(os.path.join(RESULTS_DIR, "classification_report.txt"), "w") as f:
     f.write(
         f"Average LOSO CV Accuracy: {mean_accuracy:.4f} ({mean_accuracy * 100:.2f}%)\n\n"
     )
+    f.write(f"\nAverage Classification Time per Sample: {mean_time:.6f} seconds\n")
     f.write("Overall Classification Report (from all folds):\n")
     f.write(report)
 console.print("[green]Classification report saved.[/green]")
